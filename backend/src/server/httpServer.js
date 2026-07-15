@@ -22,7 +22,7 @@ const fs = require('node:fs');
 const defaultEngine = require('../engine');
 const defaultPrize = require('../prize/prizeCode');
 const { SessionStore } = require('./store');
-const { createRateLimiter } = require('./rateLimit');
+const { createRateLimiter, DEFAULT_WINDOW_MS } = require('./rateLimit');
 const { acceptKey, encodeText, encodeClose, encodePong, FrameParser, OPCODES } = require('./wsFrames');
 
 const MAX_BODY_BYTES = 4096;
@@ -83,6 +83,11 @@ function buildEventList(engine, plan, timeline) {
 function createServer({ engine = defaultEngine, prize = defaultPrize, store, rateLimiter, now = Date.now } = {}) {
   const sessions = store || new SessionStore({ now });
   const limiter = rateLimiter || createRateLimiter({ now });
+
+  // Bound the limiter's per-IP map over a long event; unref so it never
+  // holds the process open, and clear it once the server itself closes.
+  const sweepTimer = setInterval(() => limiter.sweep(), DEFAULT_WINDOW_MS);
+  sweepTimer.unref();
 
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -306,6 +311,8 @@ function createServer({ engine = defaultEngine, prize = defaultPrize, store, rat
 
     pump();
   });
+
+  server.on('close', () => clearInterval(sweepTimer));
 
   server.sessions = sessions;
   return server;

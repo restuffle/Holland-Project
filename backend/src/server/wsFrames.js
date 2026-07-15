@@ -16,6 +16,11 @@ const crypto = require('node:crypto');
 
 const WS_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
 
+// Every real message on this stream is a short JSON string (ticker lines,
+// close/ping control frames); a declared length above this is only ever a
+// hostile or broken client trying to make us buffer an unbounded payload.
+const MAX_FRAME_PAYLOAD = 16 * 1024;
+
 const OPCODES = {
   CONTINUATION: 0x0,
   TEXT: 0x1,
@@ -136,6 +141,8 @@ class FrameParser {
       offset += 8;
     }
 
+    if (payloadLen > MAX_FRAME_PAYLOAD) throw new Error('frame too large');
+
     let maskKey = null;
     if (masked) {
       if (buf.length < offset + 4) return null;
@@ -165,6 +172,7 @@ class FrameParser {
 
 module.exports = {
   OPCODES,
+  MAX_FRAME_PAYLOAD,
   acceptKey,
   encodeFrame,
   encodeText,

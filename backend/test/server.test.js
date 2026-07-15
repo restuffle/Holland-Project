@@ -215,6 +215,35 @@ test('second concurrent connection gets 409 session_in_use', async () => {
   }
 });
 
+test('oversized WS frame payload gets the socket destroyed, not buffered', async () => {
+  const { server, port } = await startServer();
+  try {
+    const { body } = await post(port, '/api/sessions', { password: 'abc123' });
+    const client = await wsConnect(port, body.sessionId);
+
+    // Declare a payload far beyond MAX_FRAME_PAYLOAD and never send the body
+    // — a real attacker only needs the 10-byte header to try to force
+    // unbounded buffering. The fix must reject this from the header alone.
+    const header = Buffer.alloc(10);
+    header[0] = 0x82; // FIN + binary opcode
+    header[1] = 127; // 64-bit extended length follows
+    header.writeBigUInt64BE(BigInt(50 * 1024 * 1024), 2); // 50MB, way over the cap
+    client.socket.write(header);
+
+    await client.waitForClose();
+    // A rejected frame is a hard socket.destroy() — no WS close frame, so
+    // closeCode is never set (unlike the normal 1000 completion path).
+    assert.strictEqual(client.closeCode, null);
+    assert.ok(client.socket.destroyed);
+
+    // The bad client didn't take the server down with it.
+    const res = await post(port, '/api/sessions', { password: 'xyz' });
+    assert.strictEqual(res.status, 201);
+  } finally {
+    server.close();
+  }
+});
+
 test('disconnect before result discards the session (later connect gets 404)', async () => {
   const { server, port } = await startServer();
   try {
