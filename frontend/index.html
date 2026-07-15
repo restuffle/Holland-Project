@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Operation: Vault Breach</title>
+<style>
+  :root {
+    --green: #33ff66;
+    --dim-green: #1a8f3c;
+    --amber: #ffcc33;
+    --red: #ff5555;
+    --bg: #050a06;
+    --panel: #0a140c;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+  }
+  /* subtle CRT scanlines */
+  body::after {
+    content: "";
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
+    pointer-events: none;
+  }
+  .screen { display: none; width: min(920px, 94vw); }
+  .screen.active { display: block; }
+
+  h1 {
+    text-align: center;
+    font-size: clamp(1.3rem, 3.4vw, 2.2rem);
+    letter-spacing: .18em;
+    text-shadow: 0 0 12px rgba(51,255,102,.55);
+    margin-bottom: .4em;
+  }
+  .subtitle { text-align: center; color: var(--dim-green); margin-bottom: 2em; letter-spacing: .08em; }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--dim-green);
+    border-radius: 8px;
+    padding: 1.6em;
+    box-shadow: 0 0 24px rgba(51,255,102,.12) inset;
+  }
+
+  /* ---------- input screen ---------- */
+  .pw-row { display: flex; gap: .8em; justify-content: center; margin: 1.4em 0; }
+  #pwInput {
+    background: #000; color: var(--green);
+    border: 1px solid var(--green); border-radius: 6px;
+    font: inherit; font-size: 1.8rem; letter-spacing: .35em;
+    width: 9ch; text-align: center; padding: .35em .5em;
+    caret-color: var(--green);
+  }
+  #pwInput:focus { outline: none; box-shadow: 0 0 14px rgba(51,255,102,.5); }
+  button {
+    background: var(--green); color: #04140a;
+    border: none; border-radius: 6px;
+    font: inherit; font-weight: bold; letter-spacing: .1em;
+    padding: .6em 1.6em; font-size: 1.1rem; cursor: pointer;
+  }
+  button:hover { filter: brightness(1.15); }
+  button:disabled { opacity: .4; cursor: default; }
+  .warn { color: var(--amber); text-align: center; margin-top: 1.2em; font-size: .95rem; }
+  .hint { color: var(--dim-green); text-align: center; margin-top: .6em; font-size: .85rem; }
+  .err { color: var(--red); text-align: center; margin-top: .8em; min-height: 1.2em; }
+
+  /* ---------- crack screen ---------- */
+  .statusbar {
+    display: flex; justify-content: space-between; align-items: baseline;
+    border-bottom: 1px solid var(--dim-green);
+    padding-bottom: .5em; margin-bottom: .8em;
+    font-size: .95rem;
+  }
+  #stageLabel { color: var(--amber); letter-spacing: .12em; }
+  #clock { color: var(--green); }
+  #terminal {
+    height: 46vh; overflow: hidden;
+    font-size: .95rem; line-height: 1.45;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  #terminal .stage-line { color: var(--amber); }
+  #progressWrap { margin-top: .9em; border: 1px solid var(--dim-green); border-radius: 4px; height: 14px; }
+  #progressBar { height: 100%; width: 0%; background: var(--green); transition: width .25s linear; box-shadow: 0 0 10px rgba(51,255,102,.7); }
+
+  /* ---------- result screen ---------- */
+  .vault {
+    width: 170px; height: 170px; margin: 0 auto 1.2em;
+    border: 5px solid var(--green); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    position: relative;
+    box-shadow: 0 0 30px rgba(51,255,102,.35);
+  }
+  .vault .dial {
+    width: 120px; height: 120px; border: 4px dashed var(--dim-green); border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 2.6rem;
+    transition: transform 1.2s cubic-bezier(.3,1.4,.4,1);
+  }
+  .vault.open .dial { transform: rotate(540deg); border-color: var(--green); }
+  #resultTitle { text-align: center; font-size: 1.5rem; letter-spacing: .14em; margin-bottom: .6em; }
+  .prize {
+    text-align: center; font-size: 2.4rem; letter-spacing: .22em;
+    color: var(--amber); text-shadow: 0 0 16px rgba(255,204,51,.6);
+    margin: .5em 0 1em; user-select: all;
+  }
+  .feedback { font-size: .98rem; line-height: 1.6; }
+  .feedback .k { color: var(--amber); }
+  .tips { margin-top: 1em; border-top: 1px dashed var(--dim-green); padding-top: 1em; color: #9df0b4; }
+  .again { text-align: center; margin-top: 1.4em; }
+  #confetti { position: fixed; inset: 0; pointer-events: none; }
+  .mute { position: fixed; top: 12px; right: 14px; background: none; border: 1px solid var(--dim-green); color: var(--dim-green); padding: .3em .7em; font-size: .8rem; }
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<button class="mute" id="muteBtn" type="button">SOUND: ON</button>
+
+<!-- ============ SCREEN 1: INPUT ============ -->
+<section class="screen active" id="screen-input">
+  <h1>OPERATION: VAULT BREACH</h1>
+  <p class="subtitle">// cybersecurity awareness challenge //</p>
+  <div class="panel">
+    <p style="text-align:center">Create a <strong>sample</strong> password (up to 6 characters).<br>
+    Our simulated attacker will show you how fast it could fall.</p>
+    <div class="pw-row">
+      <input id="pwInput" maxlength="6" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="sample password">
+      <button id="analyzeBtn" type="button">ANALYZE</button>
+    </div>
+    <p class="err" id="inputErr"></p>
+    <p class="warn">&#9888; Never enter a real password you use anywhere. This is a demonstration.</p>
+    <p class="hint">Passwords exist only for this demo and are never stored or logged.</p>
+  </div>
+</section>
+
+<!-- ============ SCREEN 2: CRACK IN PROGRESS ============ -->
+<section class="screen" id="screen-crack">
+  <h1>BREACH IN PROGRESS</h1>
+  <div class="panel">
+    <div class="statusbar">
+      <span id="stageLabel">INITIALIZING&hellip;</span>
+      <span id="clock">00.0s</span>
+    </div>
+    <div id="terminal" aria-live="polite"></div>
+    <div id="progressWrap"><div id="progressBar"></div></div>
+  </div>
+</section>
+
+<!-- ============ SCREEN 3: RESULT ============ -->
+<section class="screen" id="screen-result">
+  <h1>VAULT BREACHED</h1>
+  <div class="vault" id="vault"><div class="dial">&#128274;</div></div>
+  <p id="resultTitle">PASSWORD CRACKED IN <span id="crackTime"></span></p>
+  <p class="prize" id="prizeCode"></p>
+  <p style="text-align:center;color:var(--dim-green)">Show this code at the prize table!</p>
+  <div class="panel feedback" id="feedback" style="margin-top:1.2em"></div>
+  <div class="again"><button id="againBtn" type="button">TRY ANOTHER PASSWORD</button></div>
+</section>
+
+<script>
+(() => {
+  'use strict';
+
+  // ---------- helpers ----------
+  const $ = (id) => document.getElementById(id);
+  const screens = { input: $('screen-input'), crack: $('screen-crack'), result: $('screen-result') };
+  function show(name) {
+    Object.values(screens).forEach((s) => s.classList.remove('active'));
+    screens[name].classList.add('active');
+  }
+
+  // All dynamic strings are inserted via textContent — never innerHTML —
+  // per the API contract's sanitization requirement.
+  function addLine(text, cls) {
+    const term = $('terminal');
+    const line = document.createElement('div');
+    line.textContent = text;
+    if (cls) line.className = cls;
+    term.appendChild(line);
+    while (term.children.length > 200) term.removeChild(term.firstChild);
+    term.scrollTop = term.scrollHeight;
+  }
+
+  // ---------- sound (WebAudio, no assets) ----------
+  let audioCtx = null;
+  let muted = false;
+  $('muteBtn').addEventListener('click', () => {
+    muted = !muted;
+    $('muteBtn').textContent = muted ? 'SOUND: OFF' : 'SOUND: ON';
+  });
+  function beep(freq, dur, type = 'square', gainVal = 0.03) {
+    if (muted) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = type; osc.frequency.value = freq;
+      gain.gain.value = gainVal;
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+      osc.stop(audioCtx.currentTime + dur);
+    } catch { /* audio unavailable — stay silent */ }
+  }
+  function fanfare() {
+    [523, 659, 784, 1047].forEach((f, i) => setTimeout(() => beep(f, 0.35, 'triangle', 0.05), i * 140));
+  }
+
+  // ---------- confetti ----------
+  const canvas = $('confetti');
+  const ctx = canvas.getContext('2d');
+  let particles = [];
+  function resize() { canvas.width = innerWidth; canvas.height = innerHeight; }
+  addEventListener('resize', resize); resize();
+  function burstConfetti() {
+    const colors = ['#33ff66', '#ffcc33', '#66ccff', '#ff66aa', '#ffffff'];
+    for (let i = 0; i < 220; i += 1) {
+      particles.push({
+        x: canvas.width / 2, y: canvas.height / 3,
+        vx: (Math.random() - 0.5) * 14, vy: Math.random() * -11 - 3,
+        size: Math.random() * 7 + 3,
+        color: colors[(Math.random() * colors.length) | 0],
+        rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+        life: 240,
+      });
+    }
+    requestAnimationFrame(tickConfetti);
+  }
+  function tickConfetti() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles = particles.filter((p) => p.life > 0 && p.y < canvas.height + 20);
+    for (const p of particles) {
+      p.x += p.vx; p.y += p.vy; p.vy += 0.25; p.rot += p.vr; p.life -= 1;
+      ctx.save();
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size * 0.6);
+      ctx.restore();
+    }
+    if (particles.length) requestAnimationFrame(tickConfetti);
+  }
+
+  // ---------- stage labels ----------
+  const STAGE_LABELS = {
+    dictionary: 'STAGE: DICTIONARY ATTACK — trying common passwords',
+    mask: 'STAGE: PATTERN ATTACK — trying predictable patterns',
+    bruteforce: 'STAGE: BRUTE FORCE — trying every combination',
+  };
+
+  // ---------- educational feedback ----------
+  function humanDuration(ms) {
+    const s = ms / 1000;
+    if (s < 60) return s.toFixed(1) + ' seconds';
+    return (s / 60).toFixed(1) + ' minutes';
+  }
+  function buildFeedback(plan) {
+    const box = $('feedback');
+    box.textContent = '';
+    const add = (label, value) => {
+      const row = document.createElement('div');
+      const k = document.createElement('span');
+      k.className = 'k';
+      k.textContent = label + ' ';
+      row.appendChild(k);
+      row.appendChild(document.createTextNode(value));
+      box.appendChild(row);
+    };
+
+    add('STRENGTH SCORE:', Math.round(plan.score) + ' / 100');
+    add('RANDOMNESS:', plan.entropyBits.toFixed(1) + ' bits of entropy');
+    add('IN ATTACKER DICTIONARY:', plan.dictionaryHit
+      ? 'YES — this is on real "most common password" lists!'
+      : 'No — not a commonly used password.');
+    add('ATTACK STAGES NEEDED:', plan.stages.join(' > '));
+
+    const verdict = document.createElement('div');
+    verdict.style.marginTop = '0.8em';
+    if (plan.dictionaryHit) {
+      verdict.textContent = 'Verdict: attackers try lists of common passwords first — yours would fall almost instantly in a real offline attack.';
+    } else if (plan.score < 40) {
+      verdict.textContent = 'Verdict: short passwords have too few combinations. Modern hardware tries billions of guesses per second — a real 6-character password survives seconds, not years.';
+    } else {
+      verdict.textContent = 'Verdict: nice mix of characters! But even the best 6-character password falls quickly to a real offline attack. Length matters most.';
+    }
+    box.appendChild(verdict);
+
+    const tips = document.createElement('div');
+    tips.className = 'tips';
+    tips.textContent = 'LEVEL UP: use 16+ character passphrases * never reuse passwords * use a password manager * turn on multi-factor authentication. And remember — never type a real password into a demo like this one!';
+    box.appendChild(tips);
+  }
+
+  // ---------- session flow ----------
+  let ws = null;
+  let clockTimer = null;
+  let attemptBeepGate = 0;
+  let currentPlan = null;
+
+  function setError(msg) { $('inputErr').textContent = msg; }
+
+  async function startSession() {
+    const pw = $('pwInput').value;
+    if (pw.length < 1 || pw.length > 6) {
+      setError('Enter 1-6 characters.');
+      return;
+    }
+    setError('');
+    $('analyzeBtn').disabled = true;
+    try {
+      const res = await fetch('/api/sessions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: pw }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setError(body.error === 'rate_limited'
+          ? 'Whoa, slow down! Give the station a few seconds.'
+          : 'Could not start — check your password and try again.');
+        return;
+      }
+      const { sessionId, plan } = await res.json();
+      currentPlan = plan;
+      $('pwInput').value = ''; // clear the sample password immediately
+      runCrack(sessionId, plan);
+    } catch {
+      setError('Cannot reach the lab server. Grab a staff member!');
+    } finally {
+      $('analyzeBtn').disabled = false;
+    }
+  }
+
+  function runCrack(sessionId, plan) {
+    show('crack');
+    $('terminal').textContent = '';
+    $('progressBar').style.width = '0%';
+    $('stageLabel').textContent = 'INITIALIZING…';
+    addLine('> target acquired. sample vault locked.');
+    addLine('> spinning up simulated cracking rig…');
+    addLine('> estimated resistance: ' + humanDuration(plan.targetCrackTimeMs));
+
+    const startedAt = Date.now();
+    clockTimer = setInterval(() => {
+      const elapsed = Date.now() - startedAt;
+      $('clock').textContent = (elapsed / 1000).toFixed(1) + 's';
+      const pct = Math.min(99, (elapsed / plan.targetCrackTimeMs) * 100);
+      $('progressBar').style.width = pct + '%';
+    }, 100);
+
+    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+    ws = new WebSocket(proto + location.host + '/ws/sessions/' + sessionId);
+
+    ws.onmessage = (event) => {
+      let msg;
+      try { msg = JSON.parse(event.data); } catch { return; }
+      if (msg.type === 'attempt') {
+        addLine(msg.text);
+        const nowT = Date.now();
+        if (nowT - attemptBeepGate > 450) { beep(880 + Math.random() * 300, 0.03); attemptBeepGate = nowT; }
+      } else if (msg.type === 'stage') {
+        $('stageLabel').textContent = STAGE_LABELS[msg.stage] || ('STAGE: ' + String(msg.stage).toUpperCase());
+        addLine('>> ' + ($('stageLabel').textContent), 'stage-line');
+        beep(330, 0.18, 'sawtooth', 0.04);
+      } else if (msg.type === 'result') {
+        finish(msg);
+      } else if (msg.type === 'error') {
+        addLine('!! session error: ' + msg.error, 'stage-line');
+        setTimeout(resetToInput, 2500);
+      }
+    };
+    ws.onerror = () => {
+      addLine('!! connection lost — grab a staff member', 'stage-line');
+    };
+  }
+
+  function finish(result) {
+    clearInterval(clockTimer);
+    $('progressBar').style.width = '100%';
+    addLine('> ACCESS GRANTED', 'stage-line');
+    setTimeout(() => {
+      show('result');
+      $('crackTime').textContent = humanDuration(result.revealMs);
+      $('prizeCode').textContent = result.prizeCode;
+      buildFeedback(currentPlan);
+      const vault = $('vault');
+      vault.classList.remove('open');
+      requestAnimationFrame(() => {
+        vault.classList.add('open');
+        vault.querySelector('.dial').textContent = '\u{1F513}';
+      });
+      fanfare();
+      burstConfetti();
+    }, 900);
+  }
+
+  function resetToInput() {
+    if (ws && ws.readyState <= WebSocket.OPEN) ws.close();
+    ws = null;
+    clearInterval(clockTimer);
+    currentPlan = null;
+    $('vault').querySelector('.dial').textContent = '\u{1F512}';
+    $('vault').classList.remove('open');
+    $('pwInput').value = '';
+    setError('');
+    show('input');
+    $('pwInput').focus();
+  }
+
+  $('analyzeBtn').addEventListener('click', startSession);
+  $('pwInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') startSession(); });
+  $('againBtn').addEventListener('click', resetToInput);
+  $('pwInput').focus();
+})();
+</script>
+</body>
+</html>
