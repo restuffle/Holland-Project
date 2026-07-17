@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vault Breach — Prize Desk</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0a0a0a;
+      color: #00ff41;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 14px;
+      padding: 24px;
+    }
+
+    h1 {
+      font-size: 20px;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      border-bottom: 1px solid #00ff4133;
+      padding-bottom: 12px;
+      margin-bottom: 24px;
+    }
+
+    h2 {
+      font-size: 13px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #00ff4199;
+      margin-bottom: 12px;
+    }
+
+    section { margin-bottom: 32px; }
+
+    #redeemForm {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    #redeemForm input {
+      background: #111;
+      border: 1px solid #00ff4155;
+      color: #00ff41;
+      font-family: inherit;
+      font-size: 16px;
+      letter-spacing: 2px;
+      padding: 10px 14px;
+      text-transform: uppercase;
+      width: 200px;
+      outline: none;
+    }
+
+    #redeemForm input:focus { border-color: #00ff41; }
+
+    #redeemForm button {
+      background: #00ff4122;
+      border: 1px solid #00ff41;
+      color: #00ff41;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 14px;
+      letter-spacing: 1px;
+      padding: 10px 20px;
+      text-transform: uppercase;
+    }
+
+    #redeemForm button:hover { background: #00ff4144; }
+
+    #redeemStatus {
+      margin-top: 10px;
+      min-height: 20px;
+      font-size: 13px;
+      letter-spacing: 1px;
+    }
+
+    .status-ok   { color: #00ff41; }
+    .status-err  { color: #ff4444; }
+    .status-warn { color: #ffaa00; }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 13px;
+    }
+
+    th {
+      border-bottom: 1px solid #00ff4133;
+      color: #00ff4177;
+      font-weight: normal;
+      letter-spacing: 1px;
+      padding: 6px 10px;
+      text-align: left;
+      text-transform: uppercase;
+    }
+
+    td {
+      border-bottom: 1px solid #00ff410f;
+      padding: 6px 10px;
+    }
+
+    tr:hover td { background: #00ff410a; }
+
+    .redeemed { color: #555; text-decoration: line-through; }
+    .pending  { color: #00ff41; }
+    .badge-redeemed { color: #555; }
+    .badge-pending  { color: #ffaa00; }
+
+    .refresh-note { font-size: 11px; color: #00ff4155; margin-bottom: 8px; }
+    .empty { color: #00ff4144; padding: 12px 0; }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+
+<h1>&#9632; Operation Vault Breach &mdash; Prize Desk</h1>
+
+<section>
+  <h2>Redeem Code</h2>
+  <form id="redeemForm" autocomplete="off">
+    <input id="codeInput" type="text" placeholder="VB-XXXXXXXX" maxlength="11" spellcheck="false">
+    <button type="submit">Redeem</button>
+  </form>
+  <p id="redeemStatus"></p>
+</section>
+
+<div class="two-col">
+
+  <section>
+    <h2>Fastest Cracks</h2>
+    <p class="refresh-note">Auto-refreshes every 5s</p>
+    <table>
+      <thead>
+        <tr><th>#</th><th>Time</th><th>Code</th><th>Status</th></tr>
+      </thead>
+      <tbody id="leaderboardBody">
+        <tr><td colspan="4" class="empty">No entries yet.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>All Issued Codes</h2>
+    <p class="refresh-note">Auto-refreshes every 5s</p>
+    <table>
+      <thead>
+        <tr><th>Code</th><th>Crack Time</th><th>Status</th></tr>
+      </thead>
+      <tbody id="ledgerBody">
+        <tr><td colspan="3" class="empty">No codes issued yet.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+</div>
+
+<script>
+  function fmtMs(ms) {
+    if (ms == null) return '—';
+    return (ms / 1000).toFixed(2) + 's';
+  }
+
+  async function fetchJSON(url) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(res.status);
+    return res.json();
+  }
+
+  function setCell(td, text, cls) {
+    td.textContent = text;
+    if (cls) td.className = cls;
+  }
+
+  function buildLeaderboardRow(e) {
+    const tr = document.createElement('tr');
+    const badge = e.redeemed ? 'REDEEMED' : 'PENDING';
+    const badgeCls = e.redeemed ? 'badge-redeemed' : 'badge-pending';
+    const codeCls = e.redeemed ? 'redeemed' : 'pending';
+    [
+      [String(e.rank), ''],
+      [fmtMs(e.revealMs), ''],
+      [e.code, codeCls],
+      [badge, badgeCls],
+    ].forEach(([text, cls]) => {
+      const td = document.createElement('td');
+      setCell(td, text, cls);
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  function buildLedgerRow(e) {
+    const tr = document.createElement('tr');
+    const badge = e.redeemed ? 'REDEEMED' : 'PENDING';
+    const badgeCls = e.redeemed ? 'badge-redeemed' : 'badge-pending';
+    const codeCls = e.redeemed ? 'redeemed' : 'pending';
+    [
+      [e.code, codeCls],
+      [fmtMs(e.revealMs), ''],
+      [badge, badgeCls],
+    ].forEach(([text, cls]) => {
+      const td = document.createElement('td');
+      setCell(td, text, cls);
+      tr.appendChild(td);
+    });
+    return tr;
+  }
+
+  async function refreshLeaderboard() {
+    try {
+      const data = await fetchJSON('/admin/leaderboard');
+      const tbody = document.getElementById('leaderboardBody');
+      tbody.innerHTML = '';
+      if (!data.leaderboard.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 4;
+        td.className = 'empty';
+        td.textContent = 'No entries yet.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+      data.leaderboard.forEach((e) => tbody.appendChild(buildLeaderboardRow(e)));
+    } catch (_) {}
+  }
+
+  async function refreshLedger() {
+    try {
+      const data = await fetchJSON('/admin/ledger');
+      const tbody = document.getElementById('ledgerBody');
+      tbody.innerHTML = '';
+      if (!data.codes.length) {
+        const tr = document.createElement('tr');
+        const td = document.createElement('td');
+        td.colSpan = 3;
+        td.className = 'empty';
+        td.textContent = 'No codes issued yet.';
+        tr.appendChild(td);
+        tbody.appendChild(tr);
+        return;
+      }
+      data.codes.forEach((e) => tbody.appendChild(buildLedgerRow(e)));
+    } catch (_) {}
+  }
+
+  function refresh() {
+    refreshLeaderboard();
+    refreshLedger();
+  }
+
+  document.getElementById('redeemForm').addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const input = document.getElementById('codeInput');
+    const status = document.getElementById('redeemStatus');
+    const code = input.value.trim().toUpperCase();
+    if (!code) return;
+
+    status.textContent = 'Redeeming…';
+    status.className = '';
+
+    try {
+      const res = await fetch('/admin/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code }),
+      });
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        status.className = 'status-ok';
+        status.textContent = '✓ ' + code + ' — REDEEMED. Hand over the prize!';
+        input.value = '';
+        refresh();
+      } else if (data.error === 'already_redeemed') {
+        status.className = 'status-warn';
+        status.textContent = '⚠ ' + code + ' — already redeemed. Do not issue another prize.';
+      } else if (data.error === 'unknown_code') {
+        status.className = 'status-err';
+        status.textContent = '✗ ' + code + ' — code not found. Check spelling.';
+      } else if (data.error === 'invalid_code') {
+        status.className = 'status-err';
+        status.textContent = '✗ Enter a valid VB-XXXXXXXX code.';
+      } else {
+        status.className = 'status-err';
+        status.textContent = '✗ Error: ' + (data.error || res.status);
+      }
+    } catch (_) {
+      status.className = 'status-err';
+      status.textContent = '✗ Network error. Is the server running?';
+    }
+
+    setTimeout(() => { status.textContent = ''; status.className = ''; }, 8000);
+  });
+
+  document.getElementById('codeInput').addEventListener('input', (ev) => {
+    const sel = ev.target.selectionStart;
+    ev.target.value = ev.target.value.toUpperCase();
+    ev.target.setSelectionRange(sel, sel);
+  });
+
+  refresh();
+  setInterval(refresh, 5000);
+</script>
+
+</body>
+</html>
