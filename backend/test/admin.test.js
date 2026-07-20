@@ -24,16 +24,19 @@ const fakeEngine = {
   computeStageDurations: (plan) => [{ stage: 'dictionary', startMs: 0, endMs: plan.targetCrackTimeMs }],
 };
 
+const ADMIN_TOKEN = 'test-admin-token';
+
 function startServer() {
-  const server = createServer({ engine: fakeEngine });
+  const server = createServer({ engine: fakeEngine, adminToken: ADMIN_TOKEN });
   return new Promise((resolve) => {
     server.listen(0, '127.0.0.1', () => resolve({ server, port: server.address().port }));
   });
 }
 
-function get(port, path) {
+function get(port, path, { adminToken = ADMIN_TOKEN } = {}) {
   return new Promise((resolve, reject) => {
-    http.get({ host: '127.0.0.1', port, path }, (res) => {
+    const headers = adminToken ? { 'x-admin-token': adminToken } : {};
+    http.get({ host: '127.0.0.1', port, path, headers }, (res) => {
       let out = '';
       res.on('data', (c) => { out += c; });
       res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(out) }));
@@ -41,11 +44,13 @@ function get(port, path) {
   });
 }
 
-function post(port, path, body, raw) {
+function post(port, path, body, raw, { adminToken = ADMIN_TOKEN } = {}) {
   return new Promise((resolve, reject) => {
     const data = raw !== undefined ? raw : JSON.stringify(body);
+    const headers = { 'Content-Type': 'application/json' };
+    if (adminToken) headers['x-admin-token'] = adminToken;
     const req = http.request(
-      { host: '127.0.0.1', port, path, method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      { host: '127.0.0.1', port, path, method: 'POST', headers },
       (res) => {
         let out = '';
         res.on('data', (c) => { out += c; });
@@ -91,6 +96,46 @@ function wsRun(port, sessionId) {
     req.end();
   });
 }
+
+// --- Admin auth gate ---
+
+test('GET /admin/ledger without a token is rejected with 401', async () => {
+  const { server, port } = await startServer();
+  try {
+    const res = await get(port, '/admin/ledger', { adminToken: null });
+    assert.strictEqual(res.status, 401);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /admin/leaderboard with the wrong token is rejected with 401', async () => {
+  const { server, port } = await startServer();
+  try {
+    const res = await get(port, '/admin/leaderboard', { adminToken: 'not-the-real-token' });
+    assert.strictEqual(res.status, 401);
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /admin/redeem without a token is rejected with 401, even for a valid code', async () => {
+  const { server, port } = await startServer();
+  try {
+    const { body } = await post(port, '/api/sessions', { password: 'abc' });
+    const messages = await wsRun(port, body.sessionId);
+    const code = messages.find((m) => m.type === 'result').prizeCode;
+
+    const res = await post(port, '/admin/redeem', { code }, undefined, { adminToken: null });
+    assert.strictEqual(res.status, 401);
+
+    // Code must still be redeemable afterward — the rejected attempt didn't burn it.
+    const legit = await post(port, '/admin/redeem', { code });
+    assert.strictEqual(legit.status, 200);
+  } finally {
+    server.close();
+  }
+});
 
 // --- GET /admin/ledger ---
 

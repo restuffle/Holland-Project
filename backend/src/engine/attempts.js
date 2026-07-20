@@ -1,4 +1,5 @@
-const MASK_WORDS = ['star', 'wolf', 'blue', 'fire', 'moon', 'iron', 'leaf', 'wave'];
+const { generateFromMask } = require('./mask');
+
 const BRUTEFORCE_CHARSET = 'abcdefghijklmnopqrstuvwxyz0123456789!@#$%';
 const BRUTEFORCE_LEN = 6;
 const DEFAULT_ATTEMPTS_PER_SECOND = 8;
@@ -63,10 +64,8 @@ function generateDictionaryAttempt(attemptPool, randomFn) {
   return pick(attemptPool, randomFn) || 'scanning wordlist...';
 }
 
-function generateMaskAttempt(randomFn) {
-  const word = pick(MASK_WORDS, randomFn);
-  const digits = Math.floor(randomFn() * 100);
-  return `${word}${digits}`;
+function generateMaskAttempt(mask, randomFn) {
+  return generateFromMask(mask, randomFn);
 }
 
 function generateBruteforceAttempt(randomFn) {
@@ -80,16 +79,18 @@ function generateBruteforceAttempt(randomFn) {
 
 const GENERATORS = {
   dictionary: (attemptPool, randomFn) => generateDictionaryAttempt(attemptPool, randomFn),
-  mask: (_attemptPool, randomFn) => generateMaskAttempt(randomFn),
-  bruteforce: (_attemptPool, randomFn) => generateBruteforceAttempt(randomFn),
+  mask: (mask, randomFn) => generateMaskAttempt(mask, randomFn),
+  bruteforce: (_arg, randomFn) => generateBruteforceAttempt(randomFn),
 };
 
-function generateAttemptText(stage, attemptPool, randomFn) {
+// Second positional arg is stage-dependent: the dictionary stage's attemptPool
+// array, or the mask stage's class-template string. Bruteforce ignores it.
+function generateAttemptText(stage, attemptPoolOrMask, randomFn) {
   const generator = GENERATORS[stage];
   if (!generator) {
     throw new RangeError(`Unknown stage: ${stage}`);
   }
-  return generator(attemptPool, randomFn);
+  return generator(attemptPoolOrMask, randomFn);
 }
 
 function buildAttemptTimeline(plan, options = {}) {
@@ -99,11 +100,12 @@ function buildAttemptTimeline(plan, options = {}) {
 
   const timeline = [];
   computeStageDurations(plan).forEach(({ stage, startMs, endMs }) => {
+    const arg = stage === 'mask' ? plan.mask : plan.attemptPool;
     for (let elapsedMs = startMs; elapsedMs < endMs; elapsedMs += intervalMs) {
       timeline.push({
         stage,
         elapsedMs: Math.round(elapsedMs),
-        text: generateAttemptText(stage, plan.attemptPool, randomFn),
+        text: generateAttemptText(stage, arg, randomFn),
       });
     }
   });
@@ -114,7 +116,6 @@ module.exports = {
   computeStageDurations,
   generateAttemptText,
   buildAttemptTimeline,
-  MASK_WORDS,
   BRUTEFORCE_CHARSET,
   BRUTEFORCE_LEN,
   DEFAULT_ATTEMPTS_PER_SECOND,

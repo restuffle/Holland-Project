@@ -8,6 +8,7 @@ const {
   BRUTEFORCE_LEN,
 } = require('../src/engine/attempts');
 const { buildCrackPlan } = require('../src/engine/crackPlan');
+const { CLASS_CHARSETS } = require('../src/engine/mask');
 
 const zeroJitter = () => 0.5;
 
@@ -57,9 +58,18 @@ test('generateAttemptText: dictionary stage only ever returns a pool entry', () 
   }
 });
 
-test('generateAttemptText: mask stage returns a word+digits pattern', () => {
-  const text = generateAttemptText('mask', [], zeroJitter);
-  assert.match(text, /^[a-z]+\d{1,2}$/);
+test('generateAttemptText: mask stage generates text matching the class template, never the source word', () => {
+  const text = generateAttemptText('mask', 'ULLLDD', zeroJitter);
+  assert.equal(text.length, 6);
+  assert.match(text[0], new RegExp(`[${CLASS_CHARSETS.U}]`));
+  assert.match(text[1], new RegExp(`[${CLASS_CHARSETS.L}]`));
+  assert.match(text.slice(4), new RegExp(`^[${CLASS_CHARSETS.D}]{2}$`));
+});
+
+test('generateAttemptText: mask stage falls back to a generic template for missing/empty mask', () => {
+  const text = generateAttemptText('mask', undefined, zeroJitter);
+  assert.equal(text.length, 6);
+  assert.match(text, /^[a-z]+$/);
 });
 
 test('generateAttemptText: bruteforce stage returns a charset string of the expected length', () => {
@@ -84,6 +94,20 @@ test('buildAttemptTimeline: dictionary-hit plan never surfaces the real password
     assert.equal(entry.stage, 'dictionary');
     assert.notEqual(entry.text, password);
     assert.ok(entry.elapsedMs >= 0 && entry.elapsedMs < plan.targetCrackTimeMs);
+  });
+});
+
+test('buildAttemptTimeline: mask-stage entries follow the password\'s class template and never equal it', () => {
+  const password = 'Wolf42';
+  const plan = buildCrackPlan(password, zeroJitter);
+  assert.equal(plan.mask, 'ULLLDD');
+  const timeline = buildAttemptTimeline(plan, { randomFn: Math.random });
+
+  const maskEntries = timeline.filter((entry) => entry.stage === 'mask');
+  assert.ok(maskEntries.length > 0);
+  maskEntries.forEach((entry) => {
+    assert.notEqual(entry.text, password);
+    assert.match(entry.text, /^[A-Z][a-z]{3}\d{2}$/);
   });
 });
 

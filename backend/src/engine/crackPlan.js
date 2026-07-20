@@ -1,6 +1,7 @@
 const commonPasswords = require('./commonPasswords');
 const { computeStrengthScore } = require('./strength');
 const { calculateTargetCrackTimeMs } = require('./timing');
+const { buildMask } = require('./mask');
 
 const ATTEMPT_POOL_SIZE = 8;
 
@@ -26,6 +27,7 @@ function buildCrackPlan(password, randomFn = Math.random) {
   const passwordLength = typeof password === 'string' ? password.length : 0;
   const stages = dictionaryHit ? ['dictionary'] : ['dictionary', 'mask', 'bruteforce'];
   const attemptPool = buildAttemptPool(password, randomFn);
+  const mask = buildMask(password);
 
   return {
     passwordLength,
@@ -35,6 +37,7 @@ function buildCrackPlan(password, randomFn = Math.random) {
     targetCrackTimeMs,
     stages,
     attemptPool,
+    mask,
   };
 }
 

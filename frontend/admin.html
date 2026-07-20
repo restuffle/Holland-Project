@@ -170,8 +170,25 @@
     return (ms / 1000).toFixed(2) + 's';
   }
 
+  // /admin/* requires a shared staff token (printed in the server's startup
+  // console log). Prompted once per browser tab and cached in sessionStorage
+  // — never sent anywhere except this page's own fetch calls.
+  function getAdminToken() {
+    let token = sessionStorage.getItem('vaultBreachAdminToken');
+    if (!token) {
+      token = window.prompt('Enter the admin dashboard token (from the server console):') || '';
+      sessionStorage.setItem('vaultBreachAdminToken', token);
+    }
+    return token;
+  }
+
+  function clearAdminToken() {
+    sessionStorage.removeItem('vaultBreachAdminToken');
+  }
+
   async function fetchJSON(url) {
-    const res = await fetch(url);
+    const res = await fetch(url, { headers: { 'x-admin-token': getAdminToken() } });
+    if (res.status === 401) { clearAdminToken(); throw new Error('unauthorized'); }
     if (!res.ok) throw new Error(res.status);
     return res.json();
   }
@@ -272,12 +289,16 @@
     try {
       const res = await fetch('/admin/redeem', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-admin-token': getAdminToken() },
         body: JSON.stringify({ code }),
       });
       const data = await res.json();
 
-      if (res.ok && data.ok) {
+      if (res.status === 401) {
+        clearAdminToken();
+        status.className = 'status-err';
+        status.textContent = '✗ Wrong or missing admin token. Reload the page and re-enter it.';
+      } else if (res.ok && data.ok) {
         status.className = 'status-ok';
         status.textContent = '✓ ' + code + ' — REDEEMED. Hand over the prize!';
         input.value = '';

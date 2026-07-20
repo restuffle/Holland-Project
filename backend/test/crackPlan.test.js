@@ -41,3 +41,16 @@ test('attemptPool is non-empty for a non-dictionary password too', () => {
   const plan = buildCrackPlan('Zz9!Qw', zeroJitter);
   assert.ok(Array.isArray(plan.attemptPool) && plan.attemptPool.length > 0);
 });
+
+test('plan.mask is a structural class template derived from the password shape', () => {
+  assert.equal(buildCrackPlan('Wolf42', zeroJitter).mask, 'ULLLDD');
+  assert.equal(buildCrackPlan('42wolf', zeroJitter).mask, 'DDLLLL');
+  assert.equal(buildCrackPlan('Wolf!!', zeroJitter).mask, 'ULLLSS');
+});
+
+test('plan.mask never equals the raw password, even for the pathological self-referential case', () => {
+  // Every char in "UUUUUU" classifies to the class letter 'U' itself, so an
+  // unguarded template would equal the password verbatim.
+  const plan = buildCrackPlan('UUUUUU', zeroJitter);
+  assert.notEqual(plan.mask, 'UUUUUU');
+});

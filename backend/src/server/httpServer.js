@@ -18,6 +18,7 @@
 const http = require('node:http');
 const path = require('node:path');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 
 const defaultEngine = require('../engine');
 const defaultPrize = require('../prize/prizeCode');
@@ -80,9 +81,28 @@ function buildEventList(engine, plan, timeline) {
   return events;
 }
 
-function createServer({ engine = defaultEngine, prize = defaultPrize, store, rateLimiter, now = Date.now } = {}) {
+function createServer({
+  engine = defaultEngine,
+  prize = defaultPrize,
+  store,
+  rateLimiter,
+  now = Date.now,
+  adminToken,
+} = {}) {
   const sessions = store || new SessionStore({ now });
   const limiter = rateLimiter || createRateLimiter({ now });
+  // Every /admin/* route is unauthenticated on the wire (venue LAN, anyone on
+  // wifi can reach it) unless gated here — without this, any student can GET
+  // /admin/ledger to read every issued code and POST /admin/redeem to steal
+  // someone else's prize before they reach the table. Random per-boot token
+  // (or ADMIN_TOKEN from env, wired in server/index.js) shared verbally with
+  // prize-table staff only.
+  const resolvedAdminToken = adminToken || crypto.randomBytes(9).toString('base64url');
+
+  function isAdminAuthorized(req) {
+    const provided = req.headers['x-admin-token'];
+    return typeof provided === 'string' && provided === resolvedAdminToken;
+  }
 
   // Bound the limiter's per-IP map over a long event; unref so it never
   // holds the process open, and clear it once the server itself closes.
@@ -98,16 +118,28 @@ function createServer({ engine = defaultEngine, prize = defaultPrize, store, rat
     }
 
     if (req.method === 'POST' && url.pathname === '/admin/redeem') {
+      if (!isAdminAuthorized(req)) {
+        json(res, 401, { error: 'unauthorized' });
+        return;
+      }
       handleAdminRedeem(req, res);
       return;
     }
 
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/admin/ledger') {
+      if (!isAdminAuthorized(req)) {
+        json(res, 401, { error: 'unauthorized' });
+        return;
+      }
       json(res, 200, { codes: prize.getLedger() });
       return;
     }
 
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/admin/leaderboard') {
+      if (!isAdminAuthorized(req)) {
+        json(res, 401, { error: 'unauthorized' });
+        return;
+      }
       json(res, 200, { leaderboard: prize.getLeaderboard() });
       return;
     }
@@ -174,6 +206,12 @@ function createServer({ engine = defaultEngine, prize = defaultPrize, store, rat
   }
 
   function handleAdminRedeem(req, res) {
+    const ip = req.socket.remoteAddress || 'unknown';
+    if (!limiter.check(ip)) {
+      json(res, 429, { error: 'rate_limited' });
+      return;
+    }
+
     let body = '';
     req.setEncoding('utf8');
     req.on('data', (chunk) => {
@@ -365,6 +403,7 @@ function createServer({ engine = defaultEngine, prize = defaultPrize, store, rat
   server.on('close', () => clearInterval(sweepTimer));
 
   server.sessions = sessions;
+  server.adminToken = resolvedAdminToken;
   return server;
 }
 
