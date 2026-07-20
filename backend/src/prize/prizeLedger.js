@@ -20,7 +20,7 @@ function randomCode() {
 
 /**
  * Generate a unique prize code and record it in the ledger.
- * @param {{ revealMs?: number, score?: number }} [meta]
+ * @param {{ revealMs?: number, score?: number, name?: string }} [meta]
  * @returns {string}
  */
 function generatePrizeCode(meta = {}) {
@@ -35,6 +35,7 @@ function generatePrizeCode(meta = {}) {
     issuedAt: Date.now(),
     revealMs: meta.revealMs != null ? meta.revealMs : null,
     score: meta.score != null ? meta.score : null,
+    name: typeof meta.name === 'string' && meta.name.length > 0 ? meta.name : null,
     redeemed: false,
     redeemedAt: null,
   });
@@ -59,7 +60,7 @@ function redeemCode(code) {
 
 /**
  * All issued codes, newest-first, for the admin dashboard.
- * @returns {Array<{ code: string, issuedAt: number, revealMs: number|null, score: number|null, redeemed: boolean, redeemedAt: number|null }>}
+ * @returns {Array<{ code: string, issuedAt: number, revealMs: number|null, score: number|null, name: string|null, redeemed: boolean, redeemedAt: number|null }>}
  */
 function getLedger() {
   return Array.from(_ledger.values()).sort((a, b) => b.issuedAt - a.issuedAt);
@@ -71,9 +72,11 @@ function getLedger() {
  * about — "fastest crack" would rank the weakest password first, which is
  * backwards for a security lesson). Ties broken by revealMs descending
  * (slower crack wins the tie). Excludes entries with no score (codes issued
- * without scoring data, e.g. via test hooks).
+ * without scoring data, e.g. via test hooks). Score itself isn't part of the
+ * returned shape — rank already encodes it, and the display favors the
+ * student's name over the raw number or the redemption code.
  * @param {number} [limit=10]
- * @returns {Array<{ rank: number, code: string, score: number, revealMs: number|null, redeemed: boolean }>}
+ * @returns {Array<{ rank: number, name: string|null, revealMs: number|null, redeemed: boolean }>}
  */
 function getLeaderboard(limit = 10) {
   return Array.from(_ledger.values())
@@ -82,8 +85,7 @@ function getLeaderboard(limit = 10) {
     .slice(0, limit)
     .map((e, i) => ({
       rank: i + 1,
-      code: e.code,
-      score: e.score,
+      name: e.name,
       revealMs: e.revealMs,
       redeemed: e.redeemed,
     }));

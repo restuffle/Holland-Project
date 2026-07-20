@@ -93,8 +93,8 @@ function wsRun(port, sessionId) {
   });
 }
 
-async function runFullSession(port, password) {
-  const { body: created } = await post(port, '/api/sessions', { password });
+async function runFullSession(port, password, name = 'Sam') {
+  const { body: created } = await post(port, '/api/sessions', { password, name });
   const { messages, raw } = await wsRun(port, created.sessionId);
   return { created, messages, raw };
 }
@@ -105,7 +105,7 @@ test('XSS-in-password-field: hostile password never appears in the HTTP response
   const { server, port } = await startServer({ engine: fastEngine(150) });
   try {
     const password = '<img>'; // 5 chars — the field caps at 6, real script tags don't fit
-    const { body: created, raw: createRaw } = await post(port, '/api/sessions', { password });
+    const { body: created, raw: createRaw } = await post(port, '/api/sessions', { password, name: 'Sam' });
     assert.strictEqual(created.plan.stages.includes('bruteforce'), true);
     assert.ok(!createRaw.includes(password));
 
@@ -130,6 +130,39 @@ test('XSS-in-password-field: angle-bracket password completes a normal session',
   }
 });
 
+// --- XSS-in-name-field: the leaderboard's name column is new attacker-reachable
+// surface, unlike password it's actually retained and displayed on admin.html.
+// The contract's textContent-only rule already covers this (admin.html renders
+// via setCell -> td.textContent), so this asserts the backend passes the
+// hostile string through byte-for-byte rather than mangling or partially
+// stripping it, leaving no doubt the display layer is the only sanitization point.
+
+function getWithAdminToken(port, path, adminToken) {
+  return new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path, headers: { 'x-admin-token': adminToken } }, (res) => {
+      let out = '';
+      res.on('data', (c) => { out += c; });
+      res.on('end', () => resolve(JSON.parse(out)));
+    }).on('error', reject);
+  });
+}
+
+test('XSS-in-name-field: hostile name is stored and surfaced verbatim in the leaderboard JSON (display layer, not the API, is responsible for escaping it)', async () => {
+  const adminToken = 'test-admin-token';
+  const { server, port } = await startServer({ engine: fastEngine(150), adminToken });
+  try {
+    const hostileName = '<script>alert(1)</script>';
+    const { messages } = await runFullSession(port, 'Zz9!Qw', hostileName);
+    const result = messages.find((m) => m.type === 'result');
+    assert.strictEqual(result.success, true);
+
+    const board = await getWithAdminToken(port, '/admin/leaderboard', adminToken);
+    assert.strictEqual(board.leaderboard[0].name, hostileName);
+  } finally {
+    server.close();
+  }
+});
+
 // --- script-spam (burst/flood, not just sequential) ---
 
 test('script-spam: a concurrent burst of session-creation requests from one IP is rate limited', async () => {
@@ -137,7 +170,7 @@ test('script-spam: a concurrent burst of session-creation requests from one IP i
   const { server, port } = await startServer({ rateLimiter: limiter });
   try {
     const burst = await Promise.all(
-      Array.from({ length: 15 }, () => post(port, '/api/sessions', { password: 'abc' })),
+      Array.from({ length: 15 }, () => post(port, '/api/sessions', { password: 'abc', name: 'Sam' })),
     );
     const statuses = burst.map((r) => r.status);
     const ok = statuses.filter((s) => s === 201).length;

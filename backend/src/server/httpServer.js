@@ -27,6 +27,7 @@ const { createRateLimiter, DEFAULT_WINDOW_MS } = require('./rateLimit');
 const { acceptKey, encodeText, encodeClose, encodePong, FrameParser, OPCODES } = require('./wsFrames');
 
 const MAX_BODY_BYTES = 4096;
+const MAX_NAME_LEN = 40;
 const WS_PATH_RE = /^\/ws\/sessions\/([A-Za-z0-9_-]+)$/;
 const FRONTEND_DIR = path.join(__dirname, '..', '..', '..', 'frontend');
 
@@ -185,9 +186,14 @@ function createServer({
         return;
       }
 
-      const { password } = parsed;
+      const { password, name } = parsed;
       if (typeof password !== 'string' || password.length < 1 || password.length > 6) {
         json(res, 400, { error: 'invalid_password' });
+        return;
+      }
+      const trimmedName = typeof name === 'string' ? name.trim() : '';
+      if (trimmedName.length < 1 || trimmedName.length > MAX_NAME_LEN) {
+        json(res, 400, { error: 'invalid_name' });
         return;
       }
 
@@ -199,6 +205,9 @@ function createServer({
 
       const session = sessions.create(plan, timeline);
       session.events = buildEventList(engine, plan, timeline);
+      // Unlike the password, the name isn't sensitive — it's kept for the
+      // lifetime of the ledger entry so the leaderboard can display it.
+      session.name = trimmedName;
 
       json(res, 201, { sessionId: session.id, plan: publicPlan(plan) });
     });
@@ -330,7 +339,7 @@ function createServer({
       send({
         type: 'result',
         success: true,
-        prizeCode: prize.generatePrizeCode({ revealMs, score: session.plan.score }),
+        prizeCode: prize.generatePrizeCode({ revealMs, score: session.plan.score, name: session.name }),
         revealMs,
       });
       sessions.markCompleted(session.id);

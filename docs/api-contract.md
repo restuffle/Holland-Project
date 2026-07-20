@@ -12,10 +12,16 @@ Starts a new crack session for a password the student just typed.
 **Request body**
 
 ```json
-{ "password": "abc123" }
+{ "password": "abc123", "name": "Sam" }
 ```
 
 - `password` must be a string, length 1-6 (inclusive).
+- `name` must be a string, 1-40 characters after trimming whitespace. Unlike
+  `password`, `name` is **not** discarded — it's retained on the session and later
+  written into the prize ledger entry so the leaderboard (`GET /admin/leaderboard`)
+  can display it. It is never logged and is only ever exposed to admin-token-holding
+  staff, not broadcast publicly. UI copy should nudge students toward a first name or
+  nickname rather than a full legal name.
 
 **Response `201 Created`**
 
@@ -51,6 +57,8 @@ Starts a new crack session for a password the student just typed.
 
 - `400 Bad Request` — `password` is missing, not a string, empty (length 0), or longer
   than 6 characters. Body: `{ "error": "invalid_password" }`.
+- `400 Bad Request` — `name` is missing, not a string, empty after trimming, or longer
+  than 40 characters. Body: `{ "error": "invalid_name" }`.
 - `400 Bad Request` — the request body is missing, not valid JSON, or otherwise
   unparseable (independent of the password-specific check above). Body:
   `{ "error": "invalid_request" }`.

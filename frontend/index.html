@@ -129,8 +129,12 @@
   <h1>OPERATION: VAULT BREACH</h1>
   <p class="subtitle">// cybersecurity awareness challenge //</p>
   <div class="panel">
-    <p style="text-align:center">Create a <strong>sample</strong> password (up to 6 characters).<br>
+    <p style="text-align:center">Enter a <strong>first name or nickname</strong> for the leaderboard, then create a
+    <strong>sample</strong> password (up to 6 characters).<br>
     Our simulated attacker will show you how fast it could fall.</p>
+    <div class="pw-row">
+      <input id="nameInput" maxlength="40" autocomplete="off" spellcheck="false" aria-label="name for leaderboard" placeholder="First name or nickname">
+    </div>
     <div class="pw-row">
       <input id="pwInput" maxlength="6" autocomplete="off" autocapitalize="off" spellcheck="false" aria-label="sample password">
       <button id="analyzeBtn" type="button">ANALYZE</button>
@@ -307,7 +311,12 @@
   function setError(msg) { $('inputErr').textContent = msg; }
 
   async function startSession() {
+    const name = $('nameInput').value.trim();
     const pw = $('pwInput').value;
+    if (name.length < 1) {
+      setError('Enter your name or a nickname for the leaderboard.');
+      return;
+    }
     if (pw.length < 1 || pw.length > 6) {
       setError('Enter 1-6 characters.');
       return;
@@ -318,7 +327,7 @@
       const res = await fetch('/api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pw }),
+        body: JSON.stringify({ password: pw, name }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));

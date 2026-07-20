@@ -122,7 +122,7 @@ test('GET /admin/leaderboard with the wrong token is rejected with 401', async (
 test('POST /admin/redeem without a token is rejected with 401, even for a valid code', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc', name: 'Sam' });
     const messages = await wsRun(port, body.sessionId);
     const code = messages.find((m) => m.type === 'result').prizeCode;
 
@@ -153,7 +153,7 @@ test('GET /admin/ledger returns 200 with empty codes array initially', async () 
 test('GET /admin/ledger lists codes issued via completed WS sessions', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc', name: 'Sam' });
     await wsRun(port, body.sessionId);
 
     const res = await get(port, '/admin/ledger');
@@ -170,7 +170,7 @@ test('GET /admin/ledger lists codes issued via completed WS sessions', async () 
 test('GET /admin/ledger records revealMs from the completed session', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc', name: 'Sam' });
     await wsRun(port, body.sessionId);
 
     const res = await get(port, '/admin/ledger');
@@ -196,7 +196,7 @@ test('GET /admin/leaderboard returns 200 with empty leaderboard initially', asyn
 test('GET /admin/leaderboard shows entry after a completed session', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc', name: 'Sam' });
     await wsRun(port, body.sessionId);
 
     const res = await get(port, '/admin/leaderboard');
@@ -204,7 +204,7 @@ test('GET /admin/leaderboard shows entry after a completed session', async () =>
     assert.strictEqual(res.body.leaderboard.length, 1);
     assert.strictEqual(res.body.leaderboard[0].rank, 1);
     assert.ok(res.body.leaderboard[0].revealMs >= 100);
-    assert.match(res.body.leaderboard[0].code, /^VB-[A-Z0-9]{8}$/);
+    assert.strictEqual(res.body.leaderboard[0].name, 'Sam');
   } finally {
     server.close();
   }
@@ -215,7 +215,7 @@ test('GET /admin/leaderboard shows entry after a completed session', async () =>
 test('POST /admin/redeem returns 200 ok:true for a valid code', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc', name: 'Sam' });
     const messages = await wsRun(port, body.sessionId);
     const code = messages.find((m) => m.type === 'result').prizeCode;
 
@@ -230,7 +230,7 @@ test('POST /admin/redeem returns 200 ok:true for a valid code', async () => {
 test('POST /admin/redeem returns 409 already_redeemed on second redemption', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc', name: 'Sam' });
     const messages = await wsRun(port, body.sessionId);
     const code = messages.find((m) => m.type === 'result').prizeCode;
 
@@ -290,7 +290,7 @@ test('POST /admin/redeem returns 400 invalid_request for non-JSON body', async (
 test('redemption reflected in subsequent ledger and leaderboard responses', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc', name: 'Sam' });
     const messages = await wsRun(port, body.sessionId);
     const code = messages.find((m) => m.type === 'result').prizeCode;
 
@@ -301,7 +301,7 @@ test('redemption reflected in subsequent ledger and leaderboard responses', asyn
     assert.strictEqual(ledgerEntry.redeemed, true);
 
     const board = await get(port, '/admin/leaderboard');
-    const boardEntry = board.body.leaderboard.find((e) => e.code === code);
+    const boardEntry = board.body.leaderboard.find((e) => e.name === 'Sam');
     assert.strictEqual(boardEntry.redeemed, true);
   } finally {
     server.close();

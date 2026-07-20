@@ -99,7 +99,7 @@ function wsConnect(port, sessionId) {
 test('POST /api/sessions returns 201 with sessionId and public plan only', async () => {
   const { server, port } = await startServer();
   try {
-    const res = await post(port, '/api/sessions', { password: 'abc123' });
+    const res = await post(port, '/api/sessions', { password: 'abc123', name: 'Sam' });
     assert.strictEqual(res.status, 201);
     assert.match(res.body.sessionId, /^[A-Za-z0-9_-]+$/);
     assert.deepStrictEqual(Object.keys(res.body.plan).sort(), ['dictionaryHit', 'entropyBits', 'score', 'stages', 'targetCrackTimeMs']);
@@ -130,15 +130,38 @@ test('POST /api/sessions validates password and body', async () => {
   }
 });
 
+test('POST /api/sessions validates name', async () => {
+  const { server, port } = await startServer();
+  try {
+    const overlong = 'x'.repeat(41);
+    for (const bad of [
+      { password: 'abc123' },
+      { password: 'abc123', name: '' },
+      { password: 'abc123', name: '   ' },
+      { password: 'abc123', name: 42 },
+      { password: 'abc123', name: overlong },
+    ]) {
+      const res = await post(port, '/api/sessions', bad);
+      assert.strictEqual(res.status, 400);
+      assert.strictEqual(res.body.error, 'invalid_name');
+    }
+    // Leading/trailing whitespace is trimmed before the length check.
+    const trimmed = await post(port, '/api/sessions', { password: 'abc123', name: '  Sam  ' });
+    assert.strictEqual(trimmed.status, 201);
+  } finally {
+    server.close();
+  }
+});
+
 test('POST /api/sessions is rate limited per IP', async () => {
   const limiter = createRateLimiter({ max: 3 });
   const { server, port } = await startServer({ rateLimiter: limiter });
   try {
     for (let i = 0; i < 3; i += 1) {
-      const res = await post(port, '/api/sessions', { password: 'a' });
+      const res = await post(port, '/api/sessions', { password: 'a', name: 'Sam' });
       assert.strictEqual(res.status, 201);
     }
-    const blocked = await post(port, '/api/sessions', { password: 'a' });
+    const blocked = await post(port, '/api/sessions', { password: 'a', name: 'Sam' });
     assert.strictEqual(blocked.status, 429);
     assert.strictEqual(blocked.body.error, 'rate_limited');
   } finally {
@@ -149,7 +172,7 @@ test('POST /api/sessions is rate limited per IP', async () => {
 test('WebSocket streams stage/attempt events then a single result, in order', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc123' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc123', name: 'Sam' });
     const client = await wsConnect(port, body.sessionId);
     await client.waitForClose();
 
@@ -186,7 +209,7 @@ test('unknown session gets 404 error message and close code 4404', async () => {
 test('completed session gets 409 session_completed and close code 4409', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc123' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc123', name: 'Sam' });
     const first = await wsConnect(port, body.sessionId);
     await first.waitForClose();
 
@@ -202,7 +225,7 @@ test('completed session gets 409 session_completed and close code 4409', async (
 test('second concurrent connection gets 409 session_in_use', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc123' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc123', name: 'Sam' });
     const first = await wsConnect(port, body.sessionId);
     const second = await wsConnect(port, body.sessionId);
     await second.waitForClose();
@@ -218,7 +241,7 @@ test('second concurrent connection gets 409 session_in_use', async () => {
 test('oversized WS frame payload gets the socket destroyed, not buffered', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc123' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc123', name: 'Sam' });
     const client = await wsConnect(port, body.sessionId);
 
     // Declare a payload far beyond MAX_FRAME_PAYLOAD and never send the body
@@ -237,7 +260,7 @@ test('oversized WS frame payload gets the socket destroyed, not buffered', async
     assert.ok(client.socket.destroyed);
 
     // The bad client didn't take the server down with it.
-    const res = await post(port, '/api/sessions', { password: 'xyz' });
+    const res = await post(port, '/api/sessions', { password: 'xyz', name: 'Sam' });
     assert.strictEqual(res.status, 201);
   } finally {
     server.close();
@@ -247,7 +270,7 @@ test('oversized WS frame payload gets the socket destroyed, not buffered', async
 test('disconnect before result discards the session (later connect gets 404)', async () => {
   const { server, port } = await startServer();
   try {
-    const { body } = await post(port, '/api/sessions', { password: 'abc123' });
+    const { body } = await post(port, '/api/sessions', { password: 'abc123', name: 'Sam' });
     const client = await wsConnect(port, body.sessionId);
     client.socket.destroy(); // abrupt disconnect before result
     await client.waitForClose();

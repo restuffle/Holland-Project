@@ -76,6 +76,20 @@ test('records null score when meta omitted', () => {
   assert.strictEqual(entry.score, null);
 });
 
+test('records name when provided via meta', () => {
+  const code = generatePrizeCode({ name: 'Sam' });
+  const entry = getLedger().find((e) => e.code === code);
+  assert.strictEqual(entry.name, 'Sam');
+});
+
+test('records null name when meta omitted or name is not a non-empty string', () => {
+  for (const meta of [{}, { name: '' }, { name: 42 }, { name: null }]) {
+    const code = generatePrizeCode(meta);
+    const entry = getLedger().find((e) => e.code === code);
+    assert.strictEqual(entry.name, null);
+  }
+});
+
 // --- redeemCode ---
 
 test('redeemCode returns ok:true for a valid unused code', () => {
@@ -142,14 +156,14 @@ test('getLedger returns empty array when no codes issued', () => {
 // crack" would rank the weakest password first, which is backwards for a
 // security lesson.
 
-test('getLeaderboard returns entries sorted by score descending', () => {
-  generatePrizeCode({ score: 30, revealMs: 1 });
-  generatePrizeCode({ score: 90, revealMs: 2 });
-  generatePrizeCode({ score: 60, revealMs: 3 });
+test('getLeaderboard returns entries sorted by score descending (score itself isn\'t in the output shape)', () => {
+  generatePrizeCode({ score: 30, revealMs: 1, name: 'Weakest' });
+  generatePrizeCode({ score: 90, revealMs: 2, name: 'Strongest' });
+  generatePrizeCode({ score: 60, revealMs: 3, name: 'Middle' });
   const board = getLeaderboard();
-  assert.strictEqual(board[0].score, 90);
-  assert.strictEqual(board[1].score, 60);
-  assert.strictEqual(board[2].score, 30);
+  assert.strictEqual(board[0].name, 'Strongest');
+  assert.strictEqual(board[1].name, 'Middle');
+  assert.strictEqual(board[2].name, 'Weakest');
 });
 
 test('getLeaderboard breaks score ties by revealMs descending (slower crack wins the tie)', () => {
@@ -170,10 +184,10 @@ test('getLeaderboard assigns rank starting at 1', () => {
 
 test('getLeaderboard excludes entries with null score', () => {
   generatePrizeCode();
-  generatePrizeCode({ score: 55 });
+  generatePrizeCode({ score: 55, name: 'Sam' });
   const board = getLeaderboard();
   assert.strictEqual(board.length, 1);
-  assert.strictEqual(board[0].score, 55);
+  assert.strictEqual(board[0].name, 'Sam');
 });
 
 test('getLeaderboard respects limit param', () => {
@@ -194,8 +208,8 @@ test('getLeaderboard reflects redeemed flag', () => {
 });
 
 test('getLeaderboard entry has expected shape', () => {
-  const code = generatePrizeCode({ score: 72, revealMs: 7500 });
+  generatePrizeCode({ score: 72, revealMs: 7500, name: 'Sam' });
   const entry = getLeaderboard()[0];
-  assert.deepStrictEqual(Object.keys(entry).sort(), ['code', 'rank', 'redeemed', 'revealMs', 'score']);
-  assert.strictEqual(entry.code, code);
+  assert.deepStrictEqual(Object.keys(entry).sort(), ['name', 'rank', 'redeemed', 'revealMs']);
+  assert.strictEqual(entry.name, 'Sam');
 });
