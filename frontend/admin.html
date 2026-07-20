@@ -137,14 +137,14 @@
 <div class="two-col">
 
   <section>
-    <h2>Fastest Cracks</h2>
-    <p class="refresh-note">Auto-refreshes every 5s</p>
+    <h2>Toughest Passwords</h2>
+    <p class="refresh-note">Ranked by strength score, not crack speed — auto-refreshes every 5s</p>
     <table>
       <thead>
-        <tr><th>#</th><th>Time</th><th>Code</th><th>Status</th></tr>
+        <tr><th>#</th><th>Score</th><th>Time</th><th>Code</th><th>Status</th></tr>
       </thead>
       <tbody id="leaderboardBody">
-        <tr><td colspan="4" class="empty">No entries yet.</td></tr>
+        <tr><td colspan="5" class="empty">No entries yet.</td></tr>
       </tbody>
     </table>
   </section>
@@ -205,6 +205,7 @@
     const codeCls = e.redeemed ? 'redeemed' : 'pending';
     [
       [String(e.rank), ''],
+      [e.score.toFixed(1), ''],
       [fmtMs(e.revealMs), ''],
       [e.code, codeCls],
       [badge, badgeCls],
@@ -241,7 +242,7 @@
       if (!data.leaderboard.length) {
         const tr = document.createElement('tr');
         const td = document.createElement('td');
-        td.colSpan = 4;
+        td.colSpan = 5;
         td.className = 'empty';
         td.textContent = 'No entries yet.';
         tr.appendChild(td);

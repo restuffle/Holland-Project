@@ -20,7 +20,7 @@ function randomCode() {
 
 /**
  * Generate a unique prize code and record it in the ledger.
- * @param {{ revealMs?: number }} [meta]
+ * @param {{ revealMs?: number, score?: number }} [meta]
  * @returns {string}
  */
 function generatePrizeCode(meta = {}) {
@@ -34,6 +34,7 @@ function generatePrizeCode(meta = {}) {
     code,
     issuedAt: Date.now(),
     revealMs: meta.revealMs != null ? meta.revealMs : null,
+    score: meta.score != null ? meta.score : null,
     redeemed: false,
     redeemedAt: null,
   });
@@ -58,26 +59,31 @@ function redeemCode(code) {
 
 /**
  * All issued codes, newest-first, for the admin dashboard.
- * @returns {Array<{ code: string, issuedAt: number, revealMs: number|null, redeemed: boolean, redeemedAt: number|null }>}
+ * @returns {Array<{ code: string, issuedAt: number, revealMs: number|null, score: number|null, redeemed: boolean, redeemedAt: number|null }>}
  */
 function getLedger() {
   return Array.from(_ledger.values()).sort((a, b) => b.issuedAt - a.issuedAt);
 }
 
 /**
- * Top-N fastest cracks for the leaderboard. Excludes entries with no revealMs
- * (codes issued without timing data, e.g. via test hooks).
+ * Top-N toughest passwords for the leaderboard, ranked by strength score
+ * descending (highest score = hardest to crack = the one worth bragging
+ * about — "fastest crack" would rank the weakest password first, which is
+ * backwards for a security lesson). Ties broken by revealMs descending
+ * (slower crack wins the tie). Excludes entries with no score (codes issued
+ * without scoring data, e.g. via test hooks).
  * @param {number} [limit=10]
- * @returns {Array<{ rank: number, code: string, revealMs: number, redeemed: boolean }>}
+ * @returns {Array<{ rank: number, code: string, score: number, revealMs: number|null, redeemed: boolean }>}
  */
 function getLeaderboard(limit = 10) {
   return Array.from(_ledger.values())
-    .filter((e) => e.revealMs != null)
-    .sort((a, b) => a.revealMs - b.revealMs)
+    .filter((e) => e.score != null)
+    .sort((a, b) => b.score - a.score || (b.revealMs || 0) - (a.revealMs || 0))
     .slice(0, limit)
     .map((e, i) => ({
       rank: i + 1,
       code: e.code,
+      score: e.score,
       revealMs: e.revealMs,
       redeemed: e.redeemed,
     }));

@@ -330,7 +330,7 @@ function createServer({
       send({
         type: 'result',
         success: true,
-        prizeCode: prize.generatePrizeCode({ revealMs }),
+        prizeCode: prize.generatePrizeCode({ revealMs, score: session.plan.score }),
         revealMs,
       });
       sessions.markCompleted(session.id);
