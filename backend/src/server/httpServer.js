@@ -97,6 +97,21 @@ function createServer({ engine = defaultEngine, prize = defaultPrize, store, rat
       return;
     }
 
+    if (req.method === 'POST' && url.pathname === '/admin/redeem') {
+      handleAdminRedeem(req, res);
+      return;
+    }
+
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/admin/ledger') {
+      json(res, 200, { codes: prize.getLedger() });
+      return;
+    }
+
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/admin/leaderboard') {
+      json(res, 200, { leaderboard: prize.getLeaderboard() });
+      return;
+    }
+
     if (req.method === 'GET' || req.method === 'HEAD') {
       serveStatic(url.pathname, res);
       return;
@@ -154,6 +169,41 @@ function createServer({ engine = defaultEngine, prize = defaultPrize, store, rat
       session.events = buildEventList(engine, plan, timeline);
 
       json(res, 201, { sessionId: session.id, plan: publicPlan(plan) });
+    });
+    req.on('error', () => {});
+  }
+
+  function handleAdminRedeem(req, res) {
+    let body = '';
+    req.setEncoding('utf8');
+    req.on('data', (chunk) => {
+      body += chunk;
+      if (body.length > MAX_BODY_BYTES) req.destroy();
+    });
+    req.on('end', () => {
+      let parsed;
+      try {
+        parsed = JSON.parse(body);
+      } catch {
+        json(res, 400, { error: 'invalid_request' });
+        return;
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        json(res, 400, { error: 'invalid_request' });
+        return;
+      }
+      const { code } = parsed;
+      if (typeof code !== 'string' || code.length === 0) {
+        json(res, 400, { error: 'invalid_code' });
+        return;
+      }
+      const result = prize.redeemCode(code);
+      if (!result.ok) {
+        const status = result.error === 'already_redeemed' ? 409 : 404;
+        json(res, status, { error: result.error });
+        return;
+      }
+      json(res, 200, { ok: true });
     });
     req.on('error', () => {});
   }
@@ -242,7 +292,7 @@ function createServer({ engine = defaultEngine, prize = defaultPrize, store, rat
       send({
         type: 'result',
         success: true,
-        prizeCode: prize.generatePrizeCode(),
+        prizeCode: prize.generatePrizeCode({ revealMs }),
         revealMs,
       });
       sessions.markCompleted(session.id);
