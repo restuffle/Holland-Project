@@ -112,13 +112,6 @@
     .refresh-note { font-size: 11px; color: #00ff4155; margin-bottom: 8px; }
     .empty { color: #00ff4144; padding: 12px 0; }
 
-    .two-col {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 32px;
-    }
-
-    @media (max-width: 700px) { .two-col { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -134,35 +127,18 @@
   <p id="redeemStatus"></p>
 </section>
 
-<div class="two-col">
-
-  <section>
-    <h2>Toughest Passwords</h2>
-    <p class="refresh-note">Ranked by strength score, not crack speed — auto-refreshes every 5s</p>
-    <table>
-      <thead>
-        <tr><th>#</th><th>Score</th><th>Time</th><th>Code</th><th>Status</th></tr>
-      </thead>
-      <tbody id="leaderboardBody">
-        <tr><td colspan="5" class="empty">No entries yet.</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-  <section>
-    <h2>All Issued Codes</h2>
-    <p class="refresh-note">Auto-refreshes every 5s</p>
-    <table>
-      <thead>
-        <tr><th>Code</th><th>Crack Time</th><th>Status</th></tr>
-      </thead>
-      <tbody id="ledgerBody">
-        <tr><td colspan="3" class="empty">No codes issued yet.</td></tr>
-      </tbody>
-    </table>
-  </section>
-
-</div>
+<section>
+  <h2>Toughest Passwords</h2>
+  <p class="refresh-note">Ranked by strength score, not crack speed — auto-refreshes every 5s</p>
+  <table>
+    <thead>
+      <tr><th>#</th><th>Score</th><th>Time</th><th>Code</th><th>Status</th></tr>
+    </thead>
+    <tbody id="leaderboardBody">
+      <tr><td colspan="5" class="empty">No entries yet.</td></tr>
+    </tbody>
+  </table>
+</section>
 
 <script>
   function fmtMs(ms) {
@@ -217,23 +193,6 @@
     return tr;
   }
 
-  function buildLedgerRow(e) {
-    const tr = document.createElement('tr');
-    const badge = e.redeemed ? 'REDEEMED' : 'PENDING';
-    const badgeCls = e.redeemed ? 'badge-redeemed' : 'badge-pending';
-    const codeCls = e.redeemed ? 'redeemed' : 'pending';
-    [
-      [e.code, codeCls],
-      [fmtMs(e.revealMs), ''],
-      [badge, badgeCls],
-    ].forEach(([text, cls]) => {
-      const td = document.createElement('td');
-      setCell(td, text, cls);
-      tr.appendChild(td);
-    });
-    return tr;
-  }
-
   async function refreshLeaderboard() {
     try {
       const data = await fetchJSON('/admin/leaderboard');
@@ -253,28 +212,8 @@
     } catch (_) {}
   }
 
-  async function refreshLedger() {
-    try {
-      const data = await fetchJSON('/admin/ledger');
-      const tbody = document.getElementById('ledgerBody');
-      tbody.innerHTML = '';
-      if (!data.codes.length) {
-        const tr = document.createElement('tr');
-        const td = document.createElement('td');
-        td.colSpan = 3;
-        td.className = 'empty';
-        td.textContent = 'No codes issued yet.';
-        tr.appendChild(td);
-        tbody.appendChild(tr);
-        return;
-      }
-      data.codes.forEach((e) => tbody.appendChild(buildLedgerRow(e)));
-    } catch (_) {}
-  }
-
   function refresh() {
     refreshLeaderboard();
-    refreshLedger();
   }
 
   document.getElementById('redeemForm').addEventListener('submit', async (ev) => {
