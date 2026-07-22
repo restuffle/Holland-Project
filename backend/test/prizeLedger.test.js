@@ -152,26 +152,26 @@ test('getLedger returns empty array when no codes issued', () => {
 });
 
 // --- getLeaderboard ---
-// Ranked by strength score descending (toughest password first) — "fastest
-// crack" would rank the weakest password first, which is backwards for a
-// security lesson.
+// Ranked by hold time (revealMs) descending — longest-held vault first,
+// matching the time shown on the display. Hold time derives from strength
+// score, so the toughest passwords still rise to the top.
 
-test('getLeaderboard returns entries sorted by score descending (score itself isn\'t in the output shape)', () => {
-  generatePrizeCode({ score: 30, revealMs: 1, name: 'Weakest' });
-  generatePrizeCode({ score: 90, revealMs: 2, name: 'Strongest' });
-  generatePrizeCode({ score: 60, revealMs: 3, name: 'Middle' });
+test('getLeaderboard returns entries sorted by hold time descending (score itself isn\'t in the output shape)', () => {
+  generatePrizeCode({ score: 30, revealMs: 10000, name: 'Shortest' });
+  generatePrizeCode({ score: 90, revealMs: 45000, name: 'Longest' });
+  generatePrizeCode({ score: 60, revealMs: 25000, name: 'Middle' });
   const board = getLeaderboard();
-  assert.strictEqual(board[0].name, 'Strongest');
+  assert.strictEqual(board[0].name, 'Longest');
   assert.strictEqual(board[1].name, 'Middle');
-  assert.strictEqual(board[2].name, 'Weakest');
+  assert.strictEqual(board[2].name, 'Shortest');
 });
 
-test('getLeaderboard breaks score ties by revealMs descending (slower crack wins the tie)', () => {
-  generatePrizeCode({ score: 50, revealMs: 10000 });
-  generatePrizeCode({ score: 50, revealMs: 40000 });
+test('getLeaderboard breaks hold-time ties by score descending (stronger password wins the tie)', () => {
+  generatePrizeCode({ score: 50, revealMs: 20000, name: 'Lower' });
+  generatePrizeCode({ score: 80, revealMs: 20000, name: 'Higher' });
   const board = getLeaderboard();
-  assert.strictEqual(board[0].revealMs, 40000);
-  assert.strictEqual(board[1].revealMs, 10000);
+  assert.strictEqual(board[0].name, 'Higher');
+  assert.strictEqual(board[1].name, 'Lower');
 });
 
 test('getLeaderboard assigns rank starting at 1', () => {

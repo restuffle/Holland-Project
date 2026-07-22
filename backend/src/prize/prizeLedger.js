@@ -72,21 +72,22 @@ function getLedger() {
 }
 
 /**
- * Top-N toughest passwords for the leaderboard, ranked by strength score
- * descending (highest score = hardest to crack = the one worth bragging
- * about — "fastest crack" would rank the weakest password first, which is
- * backwards for a security lesson). Ties broken by revealMs descending
- * (slower crack wins the tie). Excludes entries with no score (codes issued
- * without scoring data, e.g. via test hooks). Score itself isn't part of the
- * returned shape — rank already encodes it, and the display favors the
- * student's name over the raw number or the redemption code.
+ * Top-N toughest passwords for the leaderboard, ranked by hold time
+ * (revealMs) descending — longest-held vault first. Hold time is derived
+ * from the strength score, so this still rewards the strongest password,
+ * but it matches the time the display actually shows (score-first ordering
+ * looked shuffled whenever timing jitter let a weaker password hold slightly
+ * longer). Ties broken by score descending. Excludes entries with no score
+ * (codes issued without scoring data, e.g. via test hooks). Score itself
+ * isn't part of the returned shape — rank already encodes it, and the
+ * display favors the student's name over the raw number or the code.
  * @param {number} [limit=10]
  * @returns {Array<{ rank: number, name: string|null, revealMs: number|null, redeemed: boolean }>}
  */
 function getLeaderboard(limit = 10) {
   return Array.from(_ledger.values())
     .filter((e) => e.score != null && e.issuedAt > _leaderboardResetAt)
-    .sort((a, b) => b.score - a.score || (b.revealMs || 0) - (a.revealMs || 0))
+    .sort((a, b) => (b.revealMs || 0) - (a.revealMs || 0) || b.score - a.score)
     .slice(0, limit)
     .map((e, i) => ({
       rank: i + 1,

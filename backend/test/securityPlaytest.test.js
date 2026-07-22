@@ -157,7 +157,10 @@ test('XSS-in-name-field: hostile name is stored and surfaced verbatim in the lea
     assert.strictEqual(result.success, true);
 
     const board = await getWithAdminToken(port, '/admin/leaderboard', adminToken);
-    assert.strictEqual(board.leaderboard[0].name, hostileName);
+    // Leaderboard is ranked by hold time, and earlier tests in this file share
+    // the ledger — so find the entry by name rather than assuming rank #1.
+    const entry = board.leaderboard.find((e) => e.name === hostileName);
+    assert.ok(entry, 'hostile name must appear verbatim in the leaderboard JSON');
   } finally {
     server.close();
   }
