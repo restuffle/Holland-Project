@@ -20,9 +20,9 @@
     color: var(--green);
     font-family: "Cascadia Code", "Consolas", "Courier New", monospace;
     display: flex;
-    align-items: center;
     justify-content: center;
-    overflow: hidden;
+    overflow-y: auto;
+    overflow-x: hidden;
   }
   /* subtle CRT scanlines */
   body::after {
@@ -31,7 +31,8 @@
     background: repeating-linear-gradient(0deg, rgba(0,0,0,.18) 0 1px, transparent 1px 3px);
     pointer-events: none;
   }
-  .screen { display: none; width: min(920px, 94vw); }
+  /* margin:auto centers short screens and lets tall ones scroll normally */
+  .screen { display: none; width: min(920px, 94vw); margin: auto; padding: 2.5vh 0 3vh; }
   .screen.active { display: block; }
 
   h1 {

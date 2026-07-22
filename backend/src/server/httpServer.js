@@ -153,6 +153,18 @@ function createServer({
       return;
     }
 
+    // Start a fresh leaderboard for the next group. Issued prize codes stay
+    // redeemable — only the leaderboard view resets.
+    if (req.method === 'POST' && url.pathname === '/admin/leaderboard/reset') {
+      if (!isAdminAuthorized(req)) {
+        json(res, 401, { error: 'unauthorized' });
+        return;
+      }
+      prize.resetLeaderboard();
+      json(res, 200, { ok: true });
+      return;
+    }
+
     if (req.method === 'GET' || req.method === 'HEAD') {
       serveStatic(url.pathname, res);
       return;

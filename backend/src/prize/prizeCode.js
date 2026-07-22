@@ -9,6 +9,7 @@ module.exports = {
   redeemCode: ledger.redeemCode,
   getLedger: ledger.getLedger,
   getLeaderboard: ledger.getLeaderboard,
+  resetLeaderboard: ledger.resetLeaderboard,
   // Backward-compat alias: prizeCode.test.js calls resetIssuedCodes().
   resetIssuedCodes: ledger.resetLedger,
   resetLedger: ledger.resetLedger,

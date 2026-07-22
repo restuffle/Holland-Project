@@ -110,6 +110,21 @@
     .badge-pending  { color: #ffaa00; }
 
     .refresh-note { font-size: 11px; color: #00ff4155; margin-bottom: 8px; }
+
+    .lb-actions { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+    .lb-actions button {
+      background: #ffaa0022;
+      border: 1px solid #ffaa00;
+      color: #ffaa00;
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 12px;
+      letter-spacing: 1px;
+      padding: 8px 16px;
+      text-transform: uppercase;
+    }
+    .lb-actions button:hover { background: #ffaa0044; }
+    #resetStatus { font-size: 12px; letter-spacing: 1px; }
     .empty { color: #00ff4144; padding: 12px 0; }
 
   </style>
@@ -130,6 +145,10 @@
 <section>
   <h2>Toughest Passwords</h2>
   <p class="refresh-note">Ranked by strength score, not crack speed — auto-refreshes every 5s</p>
+  <p class="lb-actions">
+    <button id="resetLbBtn" type="button">Reset leaderboard (new group)</button>
+    <span id="resetStatus"></span>
+  </p>
   <table>
     <thead>
       <tr><th>#</th><th>Name</th><th>Time</th><th>Status</th></tr>
@@ -260,6 +279,33 @@
       status.textContent = '✗ Network error. Is the server running?';
     }
 
+    setTimeout(() => { status.textContent = ''; status.className = ''; }, 8000);
+  });
+
+  document.getElementById('resetLbBtn').addEventListener('click', async () => {
+    if (!window.confirm('Reset the leaderboard for a new group?\n\nAlready-issued prize codes stay redeemable — only the leaderboard display clears.')) return;
+    const status = document.getElementById('resetStatus');
+    try {
+      const res = await fetch('/admin/leaderboard/reset', {
+        method: 'POST',
+        headers: { 'x-admin-token': getAdminToken() },
+      });
+      if (res.status === 401) {
+        clearAdminToken();
+        status.className = 'status-err';
+        status.textContent = '✗ Wrong or missing admin token. Reload the page and re-enter it.';
+      } else if (res.ok) {
+        status.className = 'status-ok';
+        status.textContent = '✓ Leaderboard reset — ready for the next group.';
+        refresh();
+      } else {
+        status.className = 'status-err';
+        status.textContent = '✗ Reset failed (' + res.status + ').';
+      }
+    } catch (_) {
+      status.className = 'status-err';
+      status.textContent = '✗ Network error. Is the server running?';
+    }
     setTimeout(() => { status.textContent = ''; status.className = ''; }, 8000);
   });
 

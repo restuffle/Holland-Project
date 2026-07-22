@@ -10,6 +10,11 @@ const ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 // Module-level ledger. In-memory only — no persistence across restarts.
 const _ledger = new Map(); // code -> entry
 
+// Leaderboard epoch: resetting between groups hides earlier entries from the
+// leaderboard WITHOUT touching the ledger, so already-issued prize codes stay
+// redeemable at the prize desk.
+let _leaderboardResetAt = 0;
+
 function randomCode() {
   let code = '';
   for (let i = 0; i < CODE_LENGTH; i += 1) {
@@ -80,7 +85,7 @@ function getLedger() {
  */
 function getLeaderboard(limit = 10) {
   return Array.from(_ledger.values())
-    .filter((e) => e.score != null)
+    .filter((e) => e.score != null && e.issuedAt > _leaderboardResetAt)
     .sort((a, b) => b.score - a.score || (b.revealMs || 0) - (a.revealMs || 0))
     .slice(0, limit)
     .map((e, i) => ({
@@ -91,9 +96,18 @@ function getLeaderboard(limit = 10) {
     }));
 }
 
+/**
+ * Hide all current entries from the leaderboard (start a fresh group).
+ * Prize codes already issued remain valid and redeemable.
+ */
+function resetLeaderboard() {
+  _leaderboardResetAt = Date.now();
+}
+
 /** Test hook: clear all issued codes and redemption state. */
 function resetLedger() {
   _ledger.clear();
+  _leaderboardResetAt = 0;
 }
 
 module.exports = {
@@ -101,6 +115,7 @@ module.exports = {
   redeemCode,
   getLedger,
   getLeaderboard,
+  resetLeaderboard,
   resetLedger,
   PREFIX,
   CODE_LENGTH,
