@@ -1,0 +1,8 @@
+{
+  "name": "holland-project",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node backend/src/server/index.js"
+  }
+}
