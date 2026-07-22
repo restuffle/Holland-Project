@@ -136,6 +136,14 @@ function createServer({
       return;
     }
 
+    // Public leaderboard for the kiosk result screen: names and hold times
+    // only — no prize codes, scores, or redemption state beyond what the
+    // shared getLeaderboard() shape already exposes.
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/api/leaderboard') {
+      json(res, 200, { leaderboard: prize.getLeaderboard() });
+      return;
+    }
+
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname === '/admin/leaderboard') {
       if (!isAdminAuthorized(req)) {
         json(res, 401, { error: 'unauthorized' });

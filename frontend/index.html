@@ -53,6 +53,15 @@
 
   /* ---------- input screen ---------- */
   .pw-row { display: flex; gap: .8em; justify-content: center; margin: 1.4em 0; }
+  #nameInput {
+    background: #000; color: var(--green);
+    border: 1px solid var(--green); border-radius: 6px;
+    font: inherit; font-size: 1.15rem; letter-spacing: .08em;
+    width: min(26ch, 100%); text-align: center; padding: .5em .8em;
+    caret-color: var(--green);
+  }
+  #nameInput::placeholder { color: var(--dim-green); }
+  #nameInput:focus { outline: none; box-shadow: 0 0 14px rgba(51,255,102,.5); }
   #pwInput {
     background: #000; color: var(--green);
     border: 1px solid var(--green); border-radius: 6px;
@@ -116,6 +125,26 @@
   .feedback .k { color: var(--amber); }
   .tips { margin-top: 1em; border-top: 1px dashed var(--dim-green); padding-top: 1em; color: #9df0b4; }
   .again { text-align: center; margin-top: 1.4em; }
+
+  /* ---------- leaderboard ---------- */
+  .lb-title {
+    text-align: center; color: var(--amber);
+    font-size: 1.05rem; letter-spacing: .14em;
+    margin-bottom: .8em;
+  }
+  #leaderboard { list-style: none; }
+  #leaderboard li {
+    display: flex; align-items: baseline; gap: .8em;
+    padding: .35em .4em;
+    border-bottom: 1px dashed rgba(26,143,60,.45);
+    font-size: .98rem;
+  }
+  #leaderboard li:last-child { border-bottom: none; }
+  .lb-rank { color: var(--amber); min-width: 3ch; text-align: right; }
+  .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lb-time { color: var(--dim-green); font-size: .88rem; }
+  .lb-you { background: rgba(51,255,102,.12); box-shadow: 0 0 10px rgba(51,255,102,.25) inset; border-radius: 4px; }
+  .lb-empty { color: var(--dim-green); text-align: center; justify-content: center; }
   #confetti { position: fixed; inset: 0; pointer-events: none; }
   .mute { position: fixed; top: 12px; right: 14px; background: none; border: 1px solid var(--dim-green); color: var(--dim-green); padding: .3em .7em; font-size: .8rem; }
 </style>
@@ -166,6 +195,10 @@
   <p class="prize" id="prizeCode"></p>
   <p style="text-align:center;color:var(--dim-green)">Show this code at the prize table!</p>
   <div class="panel feedback" id="feedback" style="margin-top:1.2em"></div>
+  <div class="panel" style="margin-top:1.2em">
+    <h2 class="lb-title">// LEADERBOARD — TOUGHEST VAULTS //</h2>
+    <ol id="leaderboard"></ol>
+  </div>
   <div class="again"><button id="againBtn" type="button">TRY ANOTHER PASSWORD</button></div>
 </section>
 
@@ -302,6 +335,40 @@
     box.appendChild(tips);
   }
 
+  // ---------- leaderboard ----------
+  // Rendered with textContent only (never innerHTML) — names are user input.
+  async function loadLeaderboard(currentName) {
+    const list = $('leaderboard');
+    list.textContent = '';
+    try {
+      const res = await fetch('/api/leaderboard');
+      if (!res.ok) return;
+      const { leaderboard } = await res.json();
+      if (!Array.isArray(leaderboard) || leaderboard.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'lb-empty';
+        li.textContent = 'No challengers yet — you could be first!';
+        list.appendChild(li);
+        return;
+      }
+      for (const entry of leaderboard) {
+        const li = document.createElement('li');
+        const rank = document.createElement('span');
+        rank.className = 'lb-rank';
+        rank.textContent = entry.rank + '.';
+        const name = document.createElement('span');
+        name.className = 'lb-name';
+        name.textContent = entry.name || 'ANONYMOUS';
+        const time = document.createElement('span');
+        time.className = 'lb-time';
+        time.textContent = entry.revealMs != null ? 'held ' + humanDuration(entry.revealMs) : '';
+        li.append(rank, name, time);
+        if (currentName && entry.name === currentName) li.classList.add('lb-you');
+        list.appendChild(li);
+      }
+    } catch { /* leaderboard is best-effort — never block the result screen */ }
+  }
+
   // ---------- session flow ----------
   let ws = null;
   let clockTimer = null;
@@ -399,6 +466,7 @@
       $('crackTime').textContent = humanDuration(result.revealMs);
       $('prizeCode').textContent = result.prizeCode;
       buildFeedback(currentPlan);
+      loadLeaderboard($('nameInput').value.trim());
       const vault = $('vault');
       vault.classList.remove('open');
       requestAnimationFrame(() => {
